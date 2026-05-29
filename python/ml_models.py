@@ -3,6 +3,8 @@ import sqlite3
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 from logger import logger
 
@@ -22,7 +24,7 @@ def run_ml_models():
 
         combined = earthquakes.merge(weather, on=["latitude", "longitude"], suffixes=("_quake", "_weather"))
 
-        if len(X) < 100:
+        if len(combined) < 100:
             logger.info(f"Not enough data yet - have {len(X)} rows, need 100+")
         else:
             features = ["temperature", "pressure", "humidity", 
@@ -66,6 +68,30 @@ def run_ml_models():
             )
 
             logger.info("Predictions saved to database")
+
+            # Neural networks need scaled data unlike linear regression
+            scaler = StandardScaler()
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
+
+            # Build and train the neural network
+            nn_model = MLPRegressor(
+                hidden_layer_sizes = (64, 32), # 2 hidden layers
+                activation = "relu",
+                max_iter = 500,
+                random_state = 42
+            )
+
+            nn_model.fit(X_train_scaled, y_train)
+
+            # Evaluate
+            nn_pred = nn_model.predict(X_test_scaled)
+            nn_r2 = r2_score(y_test, nn_pred)
+            nn_rmse = np.sqrt(mean_squared_error(y_test, nn_pred))
+
+            # Logger info for neural net
+            logger.info(f"Neural Network R²: {nn_r2:.3f}")
+            logger.info(f"Neural Network RMSE: {nn_rmse:.3f}")
 
     except Exception as e:
         logger.error(f"ML models failed: {e}")
