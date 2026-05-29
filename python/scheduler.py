@@ -9,7 +9,7 @@ from anomaly_detection import run_anomaly_detection
 
 def fetch_weather_for_all_earthquakes():
     # Connect to database and get all unique earthquake locations
-    conn = sqlite3.connect("monitor.db")
+    conn = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
     locations = pd.read_sql("SELECT DISTINCT latitude, longitude FROM earthquakes", conn)
     conn.close()
 

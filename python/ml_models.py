@@ -9,7 +9,7 @@ import numpy as np
 from logger import logger
 
 def run_ml_models():
-    conn = sqlite3.connect("monitor.db")
+    conn = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
     
     try:
         earthquakes = pd.read_sql("SELECT * FROM earthquakes", conn)
@@ -24,7 +24,7 @@ def run_ml_models():
 
         combined = earthquakes.merge(weather, on=["latitude", "longitude"], suffixes=("_quake", "_weather"))
 
-        if len(combined) < 100:
+        if len(earthquakes) < 100:
             logger.info(f"Not enough data yet - have {len(X)} rows, need 100+")
         else:
             features = ["temperature", "pressure", "humidity", 

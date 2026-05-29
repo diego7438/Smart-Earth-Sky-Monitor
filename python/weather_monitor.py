@@ -10,7 +10,7 @@ api_key = os.getenv("OPENWEATHER_API_KEY")
 
 def fetch_weather(lat, lon):
     # Databse setup
-    conn = sqlite3.connect("monitor.db")
+    conn = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
     cursor = conn.cursor()
 
     # To see total rows in databse

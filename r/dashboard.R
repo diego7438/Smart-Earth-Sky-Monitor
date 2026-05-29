@@ -15,7 +15,7 @@ ui <- fluidPage(
                     position: fixed;
                     top: 0; left: 0;
                     width: 100vw;
-                    height: 100vh; 
+                    height: 100vh;
                   }
                   .title-panel {
                     color: #00d4ff;
@@ -46,19 +46,18 @@ ui <- fluidPage(
 
 # SERVER - what it does
 server <- function(input, output, session) {
-  
   # Read the fresh data every 60 seconds
   data <- reactivePoll(
     intervalMillis = 60000,
     session = session,
     checkFunc = function() {
-      conn <- dbConnect(RSQLite::SQLite(), "monitor.db")
+      conn <- dbConnect(RSQLite::SQLite(), "/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
       count <- dbGetQuery(conn, "SELECT COUNT(*) FROM earthquakes")
       dbDisconnect(conn)
       return(count)
     },
     valueFunc = function() {
-      conn <- dbConnect(RSQLite::SQLite(), "monitor.db")
+      conn <- dbConnect(RSQLite::SQLite(), "/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
       earthquakes <- dbReadTable(conn, "earthquakes")
       weather <- dbReadTable(conn, "weather") %>%
         group_by(latitude, longitude) %>%
@@ -71,7 +70,7 @@ server <- function(input, output, session) {
         FROM earthquakes e
         JOIN anomalies a ON e.id = a.id
         WHERE a.anomaly = 'anomaly'
-        ") 
+        ")
       } else {
         anomalies <- data.frame() # empty dataframe if no anomalies yet
       }
@@ -81,33 +80,33 @@ server <- function(input, output, session) {
       list(earthquakes = earthquakes, weather = weather, anomalies = anomalies)
     }
   )
-  
-  
+
+
   # Render the map
   output$map <- renderLeaflet({
     earthquakes <- data()$earthquakes
     weather <- data()$weather
     anomalies <- data()$anomalies
-    
+
     # Creates a function that converts magnitude to a color
     pal <- colorNumeric(
       palette = c("yellow", "orange", "red"),
       domain = earthquakes$magnitude
     )
-  
+
     leaflet_map <- leaflet(options = leafletOptions(worldCopyJump = TRUE)) %>%
       addProviderTiles(providers$CartoDB.DarkMatter) %>%
-      setView(lng = 0, lat = 20, zoom = 2) %>% 
+      setView(lng = 0, lat = 20, zoom = 2) %>%
       # Earthquake layer
       addCircleMarkers(
         data = earthquakes,
         lng = ~longitude,
         lat = ~latitude,
-        radius = ~magnitude * 3,
-        color = ~pal(magnitude),
+        radius = ~ magnitude * 3,
+        color = ~ pal(magnitude),
         fillOpacity = 0.8,
         weight = 2,
-        popup = ~paste("Magnitude:", magnitude, "<br>Location:", place)
+        popup = ~ paste("Magnitude:", magnitude, "<br>Location:", place)
       ) %>%
       # Weather layer
       addCircleMarkers(
@@ -117,11 +116,12 @@ server <- function(input, output, session) {
         radius = 5,
         color = "steelblue",
         opacity = 0.7,
-        popup = ~paste(
+        popup = ~ paste(
           "Temp:", temperature, "°C<br>",
           "Conditions:", weather_main, "<br>",
           "Humidity:", humidity, "%<br>",
-          "Pressure:", pressure, "hPa")
+          "Pressure:", pressure, "hPa"
+        )
       ) %>%
       addLegend(
         position = "bottomright",
@@ -129,7 +129,7 @@ server <- function(input, output, session) {
         values = earthquakes$magnitude,
         title = "Magnitude"
       )
-    
+
     # Only add anomaly layer if data exists
     if (nrow(anomalies) > 0) {
       leaflet_map <- leaflet_map %>%
@@ -137,14 +137,14 @@ server <- function(input, output, session) {
           data = anomalies,
           lng = ~longitude,
           lat = ~latitude,
-          radius = ~magnitude * 4,
+          radius = ~ magnitude * 4,
           color = "#00d4ff",
           weight = 3,
           fillOpacity = 0.5,
-          popup = ~paste("⚠️ ANOMALY<br>Magnitude:", magnitude, "<br>Location:", place)
+          popup = ~ paste("⚠️ ANOMALY<br>Magnitude:", magnitude, "<br>Location:", place)
         )
     }
-    
+
     # Always return the map
     leaflet_map
   })

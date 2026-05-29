@@ -5,7 +5,7 @@ import numpy as np
 from logger import logger
 
 def run_anomaly_detection():
-    conn = sqlite3.connect("monitor.db")
+    conn = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
     
     try:
         earthquakes = pd.read_sql("SELECT * FROM earthquakes", conn)
@@ -37,7 +37,7 @@ def run_anomaly_detection():
                 lambda x: "anomaly" if x == -1 else "normal"
             )
 
-            conn2 = sqlite3.connect("monitor.db")
+            conn2 = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
             combined[["id", "anomaly", "anomaly_score"]].to_sql(
                 "anomalies",
                 conn2,

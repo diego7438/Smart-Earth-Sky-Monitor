@@ -5,7 +5,7 @@ from logger import logger
 
 def fetch_and_save():
     # Databse setup
-    conn = sqlite3.connect("monitor.db")
+    conn = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
     cursor = conn.cursor()
 
     # To see total rows in databse
