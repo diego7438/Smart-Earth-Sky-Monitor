@@ -24,11 +24,16 @@ def run_ml_models():
 
         combined = earthquakes.merge(weather, on=["latitude", "longitude"], suffixes=("_quake", "_weather"))
 
+        # Feature engineering - add time and interaction features
+        combined["hour"] = pd.to_datetime(combined["collected_at_quake"]).dt.hour
+        combined["day_of_week"] = pd.to_datetime(combined["collected_at_quake"]).dt.dayofweek
+        combined["depth_x_magnitude"] = combined["depth"] * combined["magnitude"]
+
         if len(earthquakes) < 100:
             logger.info(f"Not enough data yet - have {len(X)} rows, need 100+")
         else:
             features = ["temperature", "pressure", "humidity", 
-            "wind_speed", "clouds", "depth"]
+            "wind_speed", "clouds", "depth", "hour", "day_of_week", "depth_x_magnitude"]
             
             X = combined[features]
             y = combined["magnitude"]
@@ -78,7 +83,7 @@ def run_ml_models():
             nn_model = MLPRegressor(
                 hidden_layer_sizes = (64, 32), # 2 hidden layers
                 activation = "relu",
-                max_iter = 500,
+                max_iter = 2000,
                 random_state = 42
             )
 
