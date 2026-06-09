@@ -5,13 +5,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, classification_report
 import numpy as np
 from logger import logger
 
 def run_ml_models():
+    # Open a connection to the local monitoring SQLite database.
     conn = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
     
     try:
+        # Load earthquake and the latest weather records per location.
         earthquakes = pd.read_sql("SELECT * FROM earthquakes", conn)
         weather = pd.read_sql("""
             SELECT * FROM weather
@@ -22,15 +26,24 @@ def run_ml_models():
             )
         """, conn)
 
+        # Merge the tables so each earthquake row has associated weather features.
         combined = earthquakes.merge(weather, on=["latitude", "longitude"], suffixes=("_quake", "_weather"))
 
-        # Feature engineering - add time and interaction features
+        # Check magnitude distribution before running:
+        print(combined["magnitude"].describe())
+        print("Above 5.0:", (combined["magnitude"] >= 5.0).sum())
+        print("Below 5.0:", (combined["magnitude"] < 5.0).sum())
+
+        # Feature engineering - extract temporal features and simple interactions.
+        # These help regression and classification models capture time-of-day
+        # effects and depth×magnitude interactions.
         combined["hour"] = pd.to_datetime(combined["collected_at_quake"]).dt.hour
         combined["day_of_week"] = pd.to_datetime(combined["collected_at_quake"]).dt.dayofweek
         combined["depth_x_magnitude"] = combined["depth"] * combined["magnitude"]
 
+        # Require a minimum dataset size to produce meaningful model results.
         if len(earthquakes) < 100:
-            logger.info(f"Not enough data yet - have {len(X)} rows, need 100+")
+            logger.info(f"Not enough data yet - have {len(earthquakes)} rows, need 100+")
         else:
             features = ["temperature", "pressure", "humidity", 
             "wind_speed", "clouds", "depth", "hour", "day_of_week", "depth_x_magnitude"]
@@ -38,16 +51,17 @@ def run_ml_models():
             X = combined[features]
             y = combined["magnitude"]
 
-            # Split data - 80% training, 20% testing
+            # Split data - 80% training, 20% testing. Keep a fixed random state
+            # for reproducible metric comparisons.
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size = 0.2, random_state = 42
             )
 
-            # Actually training the model
+            # Train a simple baseline linear regression model.
             model = LinearRegression()
             model.fit(X_train, y_train)
 
-            # Testing the model
+            # Evaluate on the held-out test set.
             y_pred = model.predict(X_test)
 
             # Evaluate
@@ -57,11 +71,12 @@ def run_ml_models():
             logger.info(f"Linear Regression R²: {r2:.3f}")
             logger.info(f"Linear Regression RMSE: {rmse:.3f}")
 
-            # Feature importance (coefficients)
+            # Log learned linear coefficients as a simple feature importance.
             for feat, coef in zip(features, model.coef_):
                 logger.info(F" {feat}: {coef:.4f}")
 
-            # Save predictions to databse for dashboard visualization
+            # Save full-set predictions and residuals back to the database so
+            # dashboards and reports can consume model outputs.
             combined["predicted_magnitude"] = model.predict(X)
             combined["residual"] = combined["magnitude"] - combined["predicted_magnitude"]
 
@@ -74,7 +89,8 @@ def run_ml_models():
 
             logger.info("Predictions saved to database")
 
-            # Neural networks need scaled data unlike linear regression
+            # Neural networks typically require feature scaling; reuse the same
+            # training/test split but with standardized features for the MLP.
             scaler = StandardScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
@@ -89,7 +105,7 @@ def run_ml_models():
 
             nn_model.fit(X_train_scaled, y_train)
 
-            # Evaluate
+            # Evaluate the neural network on the test split and log metrics.
             nn_pred = nn_model.predict(X_test_scaled)
             nn_r2 = r2_score(y_test, nn_pred)
             nn_rmse = np.sqrt(mean_squared_error(y_test, nn_pred))
@@ -97,6 +113,44 @@ def run_ml_models():
             # Logger info for neural net
             logger.info(f"Neural Network R²: {nn_r2:.3f}")
             logger.info(f"Neural Network RMSE: {nn_rmse:.3f}")
+
+            # Create a binary classification target: is magnitude >= 5.0?
+            combined["above_5"] = (combined["magnitude"] >= 5.0). astype(int) 
+            y_class = combined["above_5"]
+
+            # Same train/test split but for classification
+            X_train_c, X_test_c, y_train_c, y_test_c = train_test_split(
+                X, y_class, test_size = 0.2, random_state = 42
+            )
+
+            # Train a Random Forest classifier to predict large earthquakes.
+            rf_model = RandomForestClassifier(
+                n_estimators = 100, 
+                random_state = 42
+            )
+            rf_model.fit(X_train_c, y_train_c)
+
+            # Evaluate classification performance and log standard metrics.
+            y_pred_class = rf_model.predict(X_test_c)
+            accuracy = accuracy_score(y_test_c, y_pred_class)
+            precision = precision_score(y_test_c, y_pred_class, zero_division = 0)
+            recall = recall_score(y_test_c, y_pred_class, zero_division = 0)
+
+            # Adding logging info
+            logger.info(f"Random Forest Accuracy: {accuracy:.3f}")
+            logger.info(f"Random Forest Precision: {precision:.3f}")
+            logger.info(f"Random Forest Recall: {recall:.3f}")
+            logger.info("\n" + classification_report(y_test_c, y_pred_class, zero_division = 0))
+
+            # Feature importance - inspect which features the Random Forest
+            # relied on most for classification decisions.
+            importances = pd.DataFrame({
+                "feature": features,
+                "importance": rf_model.feature_importances_
+            }).sort_values("importance", ascending = False)
+
+            for _, row in importances.iterrows():
+                logger.info(f"  {row['feature']}: {row['importance']:.4f}")
 
     except Exception as e:
         logger.error(f"ML models failed: {e}")

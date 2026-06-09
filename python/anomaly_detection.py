@@ -5,9 +5,11 @@ import numpy as np
 from logger import logger
 
 def run_anomaly_detection():
+    # Read the local monitoring database used by the dashboard and batch jobs.
     conn = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
     
     try:
+        # Load the latest earthquake and weather records for matching locations.
         earthquakes = pd.read_sql("SELECT * FROM earthquakes", conn)
         weather = pd.read_sql("""
             SELECT * FROM weather
@@ -18,16 +20,20 @@ def run_anomaly_detection():
             )
         """, conn)
 
+        # Combine sensor data into one table so the model can score each event.
         combined = earthquakes.merge(weather, on=["latitude", "longitude"], suffixes=("_quake", "_weather"))
 
+        # Use seismic and weather measurements as anomaly detection features.
         features = ["magnitude", "depth", "temperature",
                     "pressure", "humidity", "wind_speed", "clouds"]
 
         X = combined[features]
 
+        # Avoid training on too little data, which makes the scores unreliable.
         if len(X) < 100:
             logger.info(f"Not enough data yet - have {len(X)} rows, need 100+")
         else:
+            # IsolationForest flags records that look unusual compared to the rest.
             model = IsolationForest(
                 contamination=0.1,
                 random_state=42
@@ -37,6 +43,7 @@ def run_anomaly_detection():
                 lambda x: "anomaly" if x == -1 else "normal"
             )
 
+            # Persist the latest anomaly results for downstream reports and dashboards.
             conn2 = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
             combined[["id", "anomaly", "anomaly_score"]].to_sql(
                 "anomalies",
