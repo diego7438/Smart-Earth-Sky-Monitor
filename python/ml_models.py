@@ -1,5 +1,7 @@
 import pandas as pd
 import sqlite3
+import numpy as np
+from datetime import datetime
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error
@@ -7,7 +9,6 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, classification_report
-import numpy as np
 from logger import logger
 
 def run_ml_models():
@@ -151,6 +152,25 @@ def run_ml_models():
 
             for _, row in importances.iterrows():
                 logger.info(f"  {row['feature']}: {row['importance']:.4f}")
+
+            # Save classification results to database
+            classification_results = pd.DataFrame({
+                "model" : ["linear_regression", "neural_network", "random_forest"],
+                "r2" : [r2, nn_r2, None],
+                "rmse" : [rmse, nn_rmse, None],
+                "accuracy" : [None, None, accuracy],
+                "precision" : [None, None, precision],
+                "recall" : [None, None, recall],
+                "run_at" : [datetime.now().strftime("%Y-%m-%d %H:%M:%S")] * 3 
+            })
+
+            classification_results.to_sql(
+                "model_performance",
+                conn, 
+                if_exists = "append",
+                index = False
+            )
+            logger.info("Model performance saved to database correctly.")
 
     except Exception as e:
         logger.error(f"ML models failed: {e}")

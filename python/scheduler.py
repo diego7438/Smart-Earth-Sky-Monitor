@@ -6,6 +6,7 @@ from logger import logger
 from earth_monitor import fetch_and_save
 from weather_monitor import fetch_weather
 from anomaly_detection import run_anomaly_detection
+from ml_models import run_ml_models
 
 def fetch_weather_for_all_earthquakes():
     # Connect to database and get all unique earthquake locations
@@ -18,21 +19,24 @@ def fetch_weather_for_all_earthquakes():
         fetch_weather(row["latitude"], row["longitude"])
         time.sleep(1) # be polite to the api and let it rest
 
-# Schedule both jobs
+# Schedule all jobs
 schedule.every().hour.do(fetch_and_save)
 schedule.every().hour.do(fetch_weather_for_all_earthquakes)
+schedule.every().hour.do(run_ml_models)
 
 # Run anomaly detection after each earthquake fetch
 schedule.every().hour.do(run_anomaly_detection)
 
 # Run immediately on startup
-print("Running first fetch...")
+logger.info("Running first fetch...")
 fetch_and_save()
 fetch_weather_for_all_earthquakes()
 logger.info("Running anomaly detection...")
 run_anomaly_detection()
+logger.info("Running Machine Learning Models...")
+run_ml_models()
 
-print("Scheduler running! Press Ctrl + C to stop")
+logger.info("Scheduler running! Press Ctrl + C to stop")
 while True:
     schedule.run_pending()
     time.sleep(60)
