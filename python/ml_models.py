@@ -37,9 +37,9 @@ def run_ml_models():
         combined = earthquakes.merge(weather, on=["latitude", "longitude"], suffixes=("_quake", "_weather"))
 
         # Check magnitude distribution before running:
-        print(combined["magnitude"].describe())
-        print("Above 5.0:", (combined["magnitude"] >= 5.0).sum())
-        print("Below 5.0:", (combined["magnitude"] < 5.0).sum())
+        logger.info(combined["magnitude"].describe())
+        logger.info("Above 5.0:", (combined["magnitude"] >= 5.0).sum())
+        logger.info("Below 5.0:", (combined["magnitude"] < 5.0).sum())
 
         # Feature engineering - extract temporal features and simple interactions.
         # These help regression and classification models capture time-of-day
@@ -96,6 +96,21 @@ def run_ml_models():
 
             logger.info("Predictions saved to database")
 
+            top_linear_features = sorted(
+                zip(features, model.coef_),
+                key = lambda item: abs(item[1]),
+                reverse = True
+            )[:3]
+
+            logger.info(
+                "Linear Regression conclusion: this model predicts earthquake magnitude as a continuous value from weather, depth, and time features."
+                "Lower RMSE means its magnitude predictions are closer to the real values."
+            )
+            logger.info(
+                "Linear Regression conclusion: the strongest influences this run were " 
+                + ", ".join(f"{feat} ({coef:.4f})" for feat, coef in top_linear_features)
+            )
+
             # Neural networks typically require feature scaling; reuse the same
             # training/test split but with standardized features for the MLP.
             scaler = StandardScaler()
@@ -121,8 +136,19 @@ def run_ml_models():
             logger.info(f"Neural Network R²: {nn_r2:.3f}")
             logger.info(f"Neural Network RMSE: {nn_rmse:.3f}")
 
+            logger.info("Neural Network conclusion: this model also predicts earthquake magnitude as a continuous value, "
+                        "but it can learn nonlinear patterns that linear regression cannot."
+            )
+
+            if nn_rmse < rmse:
+                logger.info("Neural Network conclusion: it performed better than linear regression on this run.")
+            elif nn_rmse > rmse:
+                logger.info("Neural Network conclusion: linear regression performed better on this run.")
+            else:
+                logger.info("Neural Network conclusion: it performed about the same as linear regression on this run.")
+
             # Create a binary classification target: is magnitude >= 5.0?
-            combined["above_5"] = (combined["magnitude"] >= 5.0). astype(int) 
+            combined["above_5"] = (combined["magnitude"] >= 5.0).astype(int) 
             y_class = combined["above_5"]
 
             # Same train/test split but for classification
@@ -177,6 +203,23 @@ def run_ml_models():
                 index = False
             )
             logger.info("Model performance saved to database correctly.")
+
+            top_rf_features = importances.head(3)
+
+            logger.info(
+                "Random Forest conclusion: this classifier predicts whether an earthquake is magnitude 5.0 or higher."
+            )
+            logger.info(
+                "Random Forest conclusion: precision tells you how often a large-earthquake alert was correct, "
+                " and recall tells you how many large earthquakes it caught."
+            )
+            logger.info(
+                "Random Forest conclusion: the strongest signals this run were "
+                + ", ".join(
+                    f"{row['feature']} ({row['importance']:.4f})"
+                    for _, row in top_rf_features.iterrows()
+                )
+            )
 
             # Serialize trained models to disk
             with open(f"{MODELS_DIR}/linear_regression.pkl", "wb") as f:
