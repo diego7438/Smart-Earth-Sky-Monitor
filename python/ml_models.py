@@ -1,6 +1,8 @@
 import pandas as pd
 import sqlite3
 import numpy as np
+import pickle
+import os
 from datetime import datetime
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
@@ -10,6 +12,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, classification_report
 from logger import logger
+
+# Path to models folder
+MODELS_DIR = "/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/models"
+os.makedirs(MODELS_DIR, exist_ok = True)
 
 def run_ml_models():
     # Open a connection to the local monitoring SQLite database.
@@ -171,6 +177,21 @@ def run_ml_models():
                 index = False
             )
             logger.info("Model performance saved to database correctly.")
+
+            # Serialize trained models to disk
+            with open(f"{MODELS_DIR}/linear_regression.pkl", "wb") as f:
+                pickle.dump(model, f)
+
+            with open(f"{MODELS_DIR}/neural_network.pkl", "wb") as f:
+                pickle.dump(nn_model, f)
+            
+            with open(f"{MODELS_DIR}/random_forest.pkl", "wb") as f:
+                pickle.dump(rf_model, f)
+
+            with open(f"{MODELS_DIR}/scaler.pkl", "wb") as f:
+                pickle.dump(scaler, f)
+            
+            logger.info("All models serialized to disk. Nice work.")
 
     except Exception as e:
         logger.error(f"ML models failed: {e}")
