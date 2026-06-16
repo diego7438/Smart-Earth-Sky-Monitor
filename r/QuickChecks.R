@@ -1,10 +1,14 @@
 library(DBI)
 library(RSQLite)
 
-conn <- dbConnect(
-    RSQLite::SQLite(),
-    "/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db"
-)
+DB_PATH <- "/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db"
+conn <- dbConnect(RSQLite::SQLite(), DB_PATH)
+
+# Load all tables into R environment automatically
+for (table_name in dbListTables(conn)) {
+  assign(table_name, dbReadTable(conn, table_name))
+  cat("Loaded:", table_name, "\n")
+}
 
 # Show all tables
 cat("=== TABLES IN DATABASE ===\n")

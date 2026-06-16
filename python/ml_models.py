@@ -12,12 +12,17 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, classification_report
 from logger import logger
+from anomaly_detection import run_anomaly_detection
 
 # Path to models folder
 MODELS_DIR = "/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/models"
 os.makedirs(MODELS_DIR, exist_ok = True)
 
 def run_ml_models():
+
+    # First run anomaly detection so scores are fresh
+    run_anomaly_detection()
+
     # Open a connection to the local monitoring SQLite database.
     conn = sqlite3.connect("/Users/diegoanderson/Desktop/Smart Earth and Sky Monitor/monitor.db")
     
@@ -38,8 +43,8 @@ def run_ml_models():
 
         # Check magnitude distribution before running:
         logger.info(combined["magnitude"].describe())
-        logger.info("Above 5.0:", (combined["magnitude"] >= 5.0).sum())
-        logger.info("Below 5.0:", (combined["magnitude"] < 5.0).sum())
+        logger.info(f"Above 5.0: {(combined['magnitude'] >= 5.0).sum()}")
+        logger.info(f"Below 5.0: {(combined['magnitude'] < 5.0).sum()}")
 
         # Feature engineering - extract temporal features and simple interactions.
         # These help regression and classification models capture time-of-day
@@ -57,6 +62,15 @@ def run_ml_models():
             
             X = combined[features]
             y = combined["magnitude"]
+
+            # Load anomaly scores if they exist
+            if "anomalies" in pd.read_sql("SELECT name FROM sqlite_master WHERE type='table'", conn)["name"].values:
+                anomalies_df = pd.read_sql("SELECT id, anomaly_score FROM anomalies", conn)
+                combined = combined.merge(anomalies_df, on = "id", how = "left")
+                combined["anomaly_score"] = combined["anomaly_score"].fillna(0)
+                features.append("anomaly_score")
+                X = combined[features]
+                logger.info("Anomaly scores added as a feature")
 
             # Split data - 80% training, 20% testing. Keep a fixed random state
             # for reproducible metric comparisons.
@@ -132,6 +146,19 @@ def run_ml_models():
             nn_r2 = r2_score(y_test, nn_pred)
             nn_rmse = np.sqrt(mean_squared_error(y_test, nn_pred))
 
+            # Save neural net predictions too
+            X_scaled = scaler.transform(X)
+            combined["nn_predicted_magnitude"] = nn_model.predict(X_scaled)
+            combined["nn_residual"] = combined["magnitude"] - combined["nn_predicted_magnitude"]
+
+            combined[["id", "nn_predicted_magnitude", "nn_residual"]].to_sql(
+                "nn_predictions",
+                conn,
+                if_exists = "replace",
+                index = False
+            )
+            logger.info("Neural network predictions saved to database")
+
             # Logger info for neural net
             logger.info(f"Neural Network R²: {nn_r2:.3f}")
             logger.info(f"Neural Network RMSE: {nn_rmse:.3f}")
@@ -151,7 +178,7 @@ def run_ml_models():
             combined["above_5"] = (combined["magnitude"] >= 5.0).astype(int) 
             y_class = combined["above_5"]
 
-            # Same train/test split but for classification
+            # Same train/test split but for Random Forest classification
             X_train_c, X_test_c, y_train_c, y_test_c = train_test_split(
                 X, y_class, test_size = 0.2, random_state = 42
             )
@@ -237,7 +264,9 @@ def run_ml_models():
             logger.info("All models serialized to disk. Nice work.")
 
     except Exception as e:
+        import traceback
         logger.error(f"ML models failed: {e}")
+        logger.error(traceback.format_exc())
 
     finally:
         conn.close()

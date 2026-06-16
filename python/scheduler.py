@@ -5,7 +5,6 @@ import pandas as pd
 from logger import logger
 from earth_monitor import fetch_and_save
 from weather_monitor import fetch_weather
-from anomaly_detection import run_anomaly_detection
 from ml_models import run_ml_models
 
 def fetch_weather_for_all_earthquakes():
@@ -31,8 +30,6 @@ schedule.every().hour.do(run_anomaly_detection)
 logger.info("Running first fetch...")
 fetch_and_save()
 fetch_weather_for_all_earthquakes()
-logger.info("Running anomaly detection...")
-run_anomaly_detection()
 logger.info("Running Machine Learning Models...")
 run_ml_models()
 
